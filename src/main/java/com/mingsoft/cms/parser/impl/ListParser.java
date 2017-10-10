@@ -1,5 +1,5 @@
 /**
-The MIT License (MIT) * Copyright (c) 2015 铭飞科技
+The MIT License (MIT) * Copyright (c) 2016 铭飞科技(mingsoft.net)
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -24,15 +24,21 @@ package com.mingsoft.cms.parser.impl;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-
-import com.mingsoft.basic.biz.IContentModelBiz;
-import com.mingsoft.basic.biz.IFieldBiz;
+import com.mingsoft.base.entity.BaseEntity;
+import com.mingsoft.basic.entity.AppEntity;
+import com.mingsoft.basic.entity.ColumnEntity;
 import com.mingsoft.cms.constant.e.ColumnTypeEnum;
 import com.mingsoft.cms.entity.ArticleEntity;
-
+import com.mingsoft.mdiy.biz.IContentModelBiz;
+import com.mingsoft.mdiy.biz.IContentModelFieldBiz;
+import com.mingsoft.mdiy.entity.ContentModelEntity;
+import com.mingsoft.mdiy.entity.ContentModelFieldEntity;
 import com.mingsoft.parser.IParserRegexConstant;
 import com.mingsoft.parser.impl.general.DateParser;
 import com.mingsoft.util.StringUtil;
@@ -57,11 +63,23 @@ import com.mingsoft.util.StringUtil;
  * [field.typeid/]:分类编号,文章所属分类的编号,<br/>
  * [field.typelink/]:分类连接,点击连接连接到当前分类的列表,<br/>
  * [field.link/]:内容链接,点击显示文章具体的内容地址,<br/>
+ * [field.hit/]:信息点击预览数,<br/>
  * 
  * @author 成卫雄 QQ:330216230 技术支持：景德镇铭飞科技 官网：www.ming-soft.com
  */
-public class ListParser extends com.mingsoft.parser.impl.general.ListParser {
+public class ListParser extends com.mingsoft.mdiy.parser.ListParser {
+	
+	protected static final String FIELD_HIT = "\\[field.hit/\\]";
 
+	/**
+	 * 新增字段业务层
+	 */
+	protected IContentModelFieldBiz fieldBiz;
+	
+	
+	protected IContentModelBiz contentBiz;
+	
+	protected AppEntity app;
 	
 	/**
 	 * 列表解析构造,
@@ -77,7 +95,8 @@ public class ListParser extends com.mingsoft.parser.impl.general.ListParser {
 	 * @param listProperty
 	 *            　当前标签属性
 	 */
-	public ListParser(String htmlCotent, List<ArticleEntity> articles,String websiteUrl, Map<String, String> listProperty, boolean isPaging,IFieldBiz fieldBiz,IContentModelBiz contentBiz) {
+	public ListParser(AppEntity app,String htmlCotent, List<ArticleEntity> articles,String websiteUrl, Map<String, String> listProperty, boolean isPaging,IContentModelFieldBiz fieldBiz,IContentModelBiz contentBiz) {
+		this.app = app;
 		String tabTmpContent = "";
 		if (isPaging) {
 			// 在HTML模版中标记出要用内容替换的标签
@@ -93,6 +112,7 @@ public class ListParser extends com.mingsoft.parser.impl.general.ListParser {
 		super.htmlCotent = tabTmpContent;
 		
 	}
+
 	
 	
 	/**
@@ -141,6 +161,8 @@ public class ListParser extends com.mingsoft.parser.impl.general.ListParser {
 					htmlList = tabContent(htmlList, StringUtil.null2String(article.getArticleAuthor()),AUTHOR_FIELD_LIST);
 					// 文章来源。
 					htmlList = tabContent(htmlList, StringUtil.null2String(article.getArticleSource()),SOURCE_FIELD_LIST);
+					// 文章来源。
+					htmlList = tabContent(htmlList, "<script src='"+app.getAppHostUrl()+"/basic/"+article.getBasicId()+"/hit.do?isShow=true'></script>",FIELD_HIT);
 					// 文章发布时间(非必填),
 					htmlList = new DateParser(htmlList,article.getBasicDateTime()).parse();//tabContent(htmlList, date(article.getBasicUpdateTime(), htmlList),DATE_FIELD_LIST);
 					
@@ -179,4 +201,53 @@ public class ListParser extends com.mingsoft.parser.impl.general.ListParser {
 		return htmlList;
 	}
 	
+
+	/**
+	 * 替换自定义字段
+	 * @param column 栏目id
+	 * @param basicId 实体id
+	 * @return
+	 */
+	protected String  replaceField(String htmlList,ColumnEntity column,int basicId){
+		
+		//判断该文章是否有扩展字段
+		if(column.getColumnContentModelId()!=0){
+			// 根据表单类型id查找出所有的字段信息
+			List<BaseEntity> listField = fieldBiz.queryListByCmid(column.getColumnContentModelId());
+			//遍历所有的字段实体,得到字段名列表信息
+			List<String> listFieldName = new ArrayList<String>();
+			for(int j = 0;j<listField.size();j++){
+				ContentModelFieldEntity field = (ContentModelFieldEntity) listField.get(j);
+				listFieldName.add(field.getFieldFieldName());
+			}
+			ContentModelEntity contentModel = (ContentModelEntity) contentBiz.getEntity(column.getColumnContentModelId());
+			// 组织where条件
+			Map<String, Integer> where = new HashMap<String, Integer>();
+			where.put("basicId",basicId);
+			// 获取各字段的值
+			List fieldLists = fieldBiz.queryBySQL(contentModel.getCmTableName(), listFieldName, where);
+		
+			if(fieldLists!=null && fieldLists.size()>0){
+				Map fields = (Map)fieldLists.get(0);
+				//计算标签的个数
+				int taglibNum = count(htmlList,TAGLIB_ARTICLE_LIST);
+				while(taglibNum!=0){
+					//String newCotent=taglibContentParser(htmlList,fields,contentModel.getCmId());
+					String newCotent= taglibContentParser(listField,htmlList,fields,contentModel.getCmId());
+					// 将取出的内容替换标签
+					htmlList = replaceFirst(newCotent,TAGLIB_ARTICLE_LIST,htmlList);
+					taglibNum = count(htmlList,TAGLIB_ARTICLE_LIST);
+				}
+			}
+		}else{
+			Pattern patternL = Pattern.compile(TAGLIB_ARTICLE_LIST);
+			Matcher matcherL = patternL.matcher(htmlList);
+			if (matcherL.find()){
+				//查找出用户填写的自定义标签字段名
+				htmlList = tabContent(htmlList, "",TAGLIB_ARTICLE_LIST);
+			}
+		}
+		return htmlList;
+	}
+
 }

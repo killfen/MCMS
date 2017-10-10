@@ -1,5 +1,5 @@
 /**
-The MIT License (MIT) * Copyright (c) 2015 铭飞科技
+The MIT License (MIT) * Copyright (c) 2016 铭飞科技(mingsoft.net)
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -32,12 +32,12 @@ import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.alibaba.fastjson.JSONObject;
 import com.mingsoft.base.action.BaseAction;
-import com.mingsoft.cms.biz.IColumnBiz;
-import com.mingsoft.basic.biz.IContentModelBiz;
-import com.mingsoft.basic.biz.IFieldBiz;
-import com.mingsoft.cms.entity.ColumnEntity;
-import com.mingsoft.basic.entity.ContentModelEntity;
-import com.mingsoft.basic.entity.FieldEntity;
+import com.mingsoft.basic.biz.IColumnBiz;
+import com.mingsoft.mdiy.biz.IContentModelBiz;
+import com.mingsoft.mdiy.biz.IContentModelFieldBiz;
+import com.mingsoft.basic.entity.ColumnEntity;
+import com.mingsoft.mdiy.entity.ContentModelEntity;
+import com.mingsoft.mdiy.entity.ContentModelFieldEntity;
 
 /**
  * 
@@ -85,7 +85,7 @@ public class FieldAction extends BaseAction{
 	 * 字段管理业务层
 	 */
 	@Autowired
-	private IFieldBiz fieldBiz;
+	private IContentModelFieldBiz fieldBiz;
 	
 	/**
 	 * 
@@ -113,7 +113,7 @@ public class FieldAction extends BaseAction{
 					return;
 				}
 				//获取字段实体
-				FieldEntity field = fieldBiz.getEntityByCmId(column.getColumnContentModelId(), fieldFieldName);
+				ContentModelFieldEntity field = fieldBiz.getEntityByCmId(column.getColumnContentModelId(), fieldFieldName);
 				//返回字段实体
 				this.outJson(response, JSONObject.toJSONString(field));
 			}

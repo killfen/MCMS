@@ -1,5 +1,5 @@
 /**
-The MIT License (MIT) * Copyright (c) 2015 铭飞科技
+The MIT License (MIT) * Copyright (c) 2016 铭飞科技(mingsoft.net)
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -41,9 +41,5 @@ public final class Const {
 	 */
 	public static final ResourceBundle ARTICLE_ATTRIBUTE_RESOURCE = ResourceBundle.getBundle("com.mingsoft.cms.resources.article_attribute");
 	
-	/**
-	 * 文章字段，提供搜索使用 
-	 * @see SearchAction
-	 */
-	public static final ResourceBundle ARTICLE_FIELD_RESOURCE = ResourceBundle.getBundle("com.mingsoft.cms.resources.article_field");
+	public static final String LOGIN_URL = "login_url";
 }

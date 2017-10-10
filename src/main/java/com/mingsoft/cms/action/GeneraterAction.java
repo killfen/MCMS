@@ -1,5 +1,5 @@
 /**
-The MIT License (MIT) * Copyright (c) 2015 铭飞科技
+The MIT License (MIT) * Copyright (c) 2016 铭飞科技(mingsoft.net)
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -27,29 +27,34 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+
 import com.alibaba.fastjson.JSONArray;
+import com.mingsoft.basic.constant.Const;
 import com.mingsoft.basic.action.BaseAction;
 import com.mingsoft.basic.biz.IAppBiz;
+import com.mingsoft.basic.biz.IColumnBiz;
 import com.mingsoft.basic.biz.IModelBiz;
-import com.mingsoft.base.constant.Const;
-import com.mingsoft.base.constant.ModelCode;
 import com.mingsoft.basic.entity.AppEntity;
 import com.mingsoft.basic.entity.CategoryEntity;
+import com.mingsoft.basic.entity.ColumnEntity;
 import com.mingsoft.cms.biz.IArticleBiz;
-import com.mingsoft.cms.biz.IColumnBiz;
+import com.mingsoft.cms.constant.ModelCode;
 import com.mingsoft.cms.constant.e.ColumnTypeEnum;
 import com.mingsoft.cms.entity.ArticleEntity;
-import com.mingsoft.cms.entity.ColumnEntity;
 import com.mingsoft.cms.parser.CmsParser;
 import com.mingsoft.parser.IParserRegexConstant;
 import com.mingsoft.util.FileUtil;
@@ -57,6 +62,8 @@ import com.mingsoft.util.StringUtil;
 import com.mingsoft.util.proxy.Header;
 import com.mingsoft.util.proxy.Proxy;
 import com.mingsoft.util.proxy.Result;
+
+import net.mingsoft.basic.util.BasicUtil;
 
 /**
  * 
@@ -94,7 +101,7 @@ import com.mingsoft.util.proxy.Result;
  *          </p>
  */
 @Controller("cmsGenerater")
-@RequestMapping("/manager/cms/generate")
+@RequestMapping("/${managerPath}/cms/generate")
 @Scope("request")
 public class GeneraterAction extends BaseAction {
 
@@ -127,6 +134,9 @@ public class GeneraterAction extends BaseAction {
 	 */
 	@Autowired
 	private CmsParser cmsParser;
+	
+	@Value("${managerPath}")
+	private String managerPath;
 
 	/**
 	 * 一键更新所有
@@ -135,13 +145,9 @@ public class GeneraterAction extends BaseAction {
 	 */
 	@RequestMapping("/all")
 	public String all() {
-		return "/manager/cms/generate/generate_all";
+		return view("/cms/generate/generate_all");
 	}
 	
-	/**
-	 * 手机端模板前缀
-	 */
-	public static final String MOBILE = "m";
 
 	/**
 	 * 更新主页
@@ -149,8 +155,15 @@ public class GeneraterAction extends BaseAction {
 	 * @return
 	 */
 	@RequestMapping("/index")
-	public String index() {
-		return "/manager/cms/generate/generate_index";
+	public String index(HttpServletRequest request,ModelMap model) {
+		// 该站点ID有session提供
+		int websiteId =  this.getAppId(request);
+		Integer modelId = modelBiz.getEntityByModelCode(ModelCode.CMS_COLUMN).getModelId(); // 查询当前模块编号
+		//获取所有的内容管理栏目
+		List<ColumnEntity> list  = columnBiz.queryAll(websiteId,modelId);
+		model.addAttribute("list",  JSONArray.toJSONString(list));
+		model.addAttribute("now", new Date());
+		return view("/cms/generate/index");
 	}
 
 	/**
@@ -160,8 +173,9 @@ public class GeneraterAction extends BaseAction {
 	 * @param response
 	 */
 	@RequestMapping("/generateIndex")
+	@RequiresPermissions("cms:generate:index")
 	@ResponseBody
-	public boolean generateIndex(HttpServletRequest request, HttpServletResponse response) {
+	public void generateIndex(HttpServletRequest request, HttpServletResponse response) {
 		String tmpFileName = request.getParameter("url"); // 模版文件名称
 		String generateFileName = request.getParameter("position");// 生成后的文件名称
 
@@ -174,20 +188,20 @@ public class GeneraterAction extends BaseAction {
 		// 模版路径加上(用户选择的主页的模版的路径)default/index.html
 		String tmpFilePath = webSiteTmpPath + File.separator + tmpFileName;
 		//读取手机端的模板
-		String tmpMobileFilePath = webSiteTmpPath + File.separator + MOBILE + File.separator + tmpFileName;// 手机端
+		String tmpMobileFilePath = webSiteTmpPath + File.separator + IParserRegexConstant.MOBILE + File.separator + tmpFileName;// 手机端
 
 		// 生成地址
 		String generatePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId + File.separator + generateFileName;
-		String generateMobilePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId + File.separator + MOBILE + File.separator + generateFileName;
+		String generateMobilePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId + File.separator + IParserRegexConstant.MOBILE + File.separator + generateFileName;
 		//生成保存htm页面的文件夹
 		FileUtil.createFolder(getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId);
-		FileUtil.createFolder(getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId + File.separator + MOBILE); // 手机端
+		FileUtil.createFolder(getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + websiteId + File.separator + IParserRegexConstant.MOBILE); // 手机端
 		// 获取文件所在路径 首先判断用户输入的模版文件是否存在
 		File file = new File(tmpFilePath);
 
 		// 判断文件是否存在，若不存在弹出返回信息
 		if (!file.exists()) {
-			return false;
+			this.outJson(response, false,"模板不存在");
 		} else {
 			// 当前模版的物理路径
 			String htmlContent = FileUtil.readFile(tmpFilePath); // 读取模版文件内容
@@ -196,17 +210,13 @@ public class GeneraterAction extends BaseAction {
 				//进行html的解析
 				htmlContent = cmsParser.parse(htmlContent,app);
 				Map map = new HashMap();
-				map.put(CmsParser.MOBILE,this.MOBILE);
+				map.put(CmsParser.MOBILE,IParserRegexConstant.MOBILE);
 				mobileHtmlContent = cmsParser.parse(mobileHtmlContent,app,map);
 				// 解析HTML上的标签
 				FileUtil.writeFile(htmlContent, generatePath, FileUtil.URF8);
 				FileUtil.writeFile(mobileHtmlContent, generateMobilePath, FileUtil.URF8);
-				return true;
-			} else {
-				// 提示错误：未找到模版
-				htmlContent = webSiteTmpPath + File.separator + tmpFileName ;
-			}
-			return false;
+				this.outJson(response, true);
+			} 
 		}
 	}
 
@@ -218,21 +228,21 @@ public class GeneraterAction extends BaseAction {
 	 * @param columnId
 	 */
 	@RequestMapping("/{columnId}/genernateColumn")
+	@RequiresPermissions("cms:generate:column")
 	@ResponseBody
-	public boolean genernateColumn(HttpServletRequest request, HttpServletResponse response, @PathVariable int columnId) {
+	public void genernateColumn(HttpServletRequest request, HttpServletResponse response, @PathVariable int columnId) {
 		// 获取站点id
-		int appId = getManagerBySession(request).getBasicId();
-		AppEntity app = (AppEntity) appBiz.getEntity(appId);
+		AppEntity app = BasicUtil.getApp();
 		String mobileStyle = app.getAppMobileStyle(); // 手机端模版
 		String url = app.getAppHostUrl() + File.separator + IParserRegexConstant.HTML_SAVE_PATH + File.separator + app.getAppId();
 		// 站点生成后保存的html地址
-		String generatePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + appId + File.separator;
+		String generatePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + app.getAppId() + File.separator;
 		FileUtil.createFolder(generatePath);
 		// 网站风格物理路径
-		String tmpPath = getRealPath(request, IParserRegexConstant.REGEX_SAVE_TEMPLATE) + File.separator + appId + File.separator + app.getAppStyle();
+		String tmpPath = getRealPath(request, IParserRegexConstant.REGEX_SAVE_TEMPLATE) + File.separator + app.getAppId() + File.separator + app.getAppStyle();
 		List<ColumnEntity> columns = new ArrayList<ColumnEntity>();
 		// 如果栏目id小于0则更新所有的栏目，否则只更新选中的栏目
-		Integer modelId = modelBiz.getEntityByModelCode(ModelCode.CMS_COLUMN).getModelId(); // 查询当前模块编号
+		int modelId = BasicUtil.getModelCodeId(ModelCode.CMS_COLUMN); // 查询当前模块编号
 		if (columnId > 0) {
 			List<CategoryEntity> categorys = columnBiz.queryChildrenCategory(columnId, app.getAppId(),modelId);
 			for (CategoryEntity c : categorys) {
@@ -287,7 +297,7 @@ public class GeneraterAction extends BaseAction {
 							String pagePath = url + File.separator + mobileStyle + File.separator + column.getColumnPath() + File.separator + IParserRegexConstant.PAGE_LIST ;
 							map.put(CmsParser.LIST_LINK_PATH, pagePath);
 							map.put(CmsParser.CUR_PAGE_NO, i + 1);
-							map.put(CmsParser.MOBILE,this.MOBILE);
+							map.put(CmsParser.MOBILE,IParserRegexConstant.MOBILE);
 							String pageContent = cmsParser.parse(mobileListTtmpContent,app,column,map);
 							FileUtil.writeFile(pageContent, writePath, FileUtil.URF8);// 写文件
 						}
@@ -324,7 +334,7 @@ public class GeneraterAction extends BaseAction {
 					// 如果模版不为空就进行标签替换
 					if (!StringUtil.isBlank(coverTtmpContent)) {
 						map = new HashMap();
-						map.put(CmsParser.MOBILE,this.MOBILE);
+						map.put(CmsParser.MOBILE,IParserRegexConstant.MOBILE);
 						// 文章地址前缀
 						// 表示该栏目下面没有文章
 						if (list == null || list.size() == 0) {
@@ -384,7 +394,7 @@ public class GeneraterAction extends BaseAction {
 				break;
 			}
 		}
-		return true;
+		this.outJson(response, true);
 	}
 
 	/**
@@ -404,7 +414,7 @@ public class GeneraterAction extends BaseAction {
 		
 		model.addAttribute("now", new Date());
 		model.addAttribute("list",  JSONArray.toJSONString(list));
-		return "/manager/cms/generate/generate_article";
+		return view("/cms/generate/generate_article");
 	}
 
 	/**
@@ -415,7 +425,7 @@ public class GeneraterAction extends BaseAction {
 	@RequestMapping("/product")
 	public String product(HttpServletRequest request) {
 		request.setAttribute("now", new Date());
-		return "/manager/cms/generate/generate_product";
+		return view("/cms/generate/generate_product");
 	}
 
 	/**
@@ -426,8 +436,9 @@ public class GeneraterAction extends BaseAction {
 	 * @param columnId
 	 */
 	@RequestMapping("/{columnId}/generateArticle")
+	@RequiresPermissions("cms:generate:article")
 	@ResponseBody
-	public boolean generateArticle(HttpServletRequest request, HttpServletResponse response, @PathVariable int columnId) {
+	public void generateArticle(HttpServletRequest request, HttpServletResponse response, @PathVariable int columnId) {
 		String dateTime = request.getParameter("dateTime");
 		AppEntity app = this.getApp(request);
 		String mobileStyle = null;
@@ -517,7 +528,7 @@ public class GeneraterAction extends BaseAction {
 									next.setArticleLinkURL(url + mobileStyle + File.separator + article.getColumn().getColumnPath() + File.separator + next.getArticleID() + IParserRegexConstant.HTML_SUFFIX);
 								}
 							}
-							map.put(CmsParser.MOBILE,this.MOBILE);
+							map.put(CmsParser.MOBILE,IParserRegexConstant.MOBILE);
 							String tmp = cmsParser.parse(mobileTmpContent,app,tempColumn,article,map);//;generaterFactory.builderArticle(app, tempColumn, article, mobileTmpContent, tmpPath, previous, next, mobileStyle); // 解析标签
 							FileUtil.writeFile(tmp, writePath, FileUtil.URF8);// 写文件
 						}
@@ -619,7 +630,7 @@ public class GeneraterAction extends BaseAction {
 			 * break; } }
 			 */
 		}
-		return true;
+		this.outJson(response, true);
 	}
 
 	/**
@@ -637,16 +648,16 @@ public class GeneraterAction extends BaseAction {
 		// 1、更新文章
 		Map parms = new HashMap();
 		parms.put("dateTime", StringUtil.getSimpleDateStr(new Date(), "yyyy-MM-dd"));
-		Header header = new Header(this.getHost(request), Const.UTF8);
+		Header header = new Header(this.getHost(request), com.mingsoft.base.constant.Const.UTF8);
 		String cookie = "";
 		for (Cookie c : request.getCookies()) {
 			cookie += c.getName() + "=" + c.getValue() + ";";
 		}
 		header.setCookie(cookie);
-		Result re = Proxy.get(this.getUrl(request) + "/manager/cms/generate/" + columnId + "/generateArticle.do", header, parms, Const.UTF8);
+		Result re = Proxy.get(this.getUrl(request) + managerPath + "/cms/generate/" + columnId + "/generateArticle.do", header, parms);
 		ColumnEntity column = (ColumnEntity) columnBiz.getEntity(columnId);
 		if (column != null && column.getColumnType() == ColumnTypeEnum.COLUMN_TYPE_COVER.toInt()) {
-			Proxy.get(this.getUrl(request) + "/manager/cms/generate/" + columnId + "/genernateColumn.do", header, null, Const.UTF8);
+			Proxy.get(this.getUrl(request) + managerPath + "/cms/generate/" + columnId + "/genernateColumn.do", header, null);
 		}
 		// 2、更新栏目
 		// Proxy.get(this.getUrl(request)+"/manager/cms/generate/"+columnId+"/genernateColumn.do",
@@ -656,7 +667,7 @@ public class GeneraterAction extends BaseAction {
 		Map map = new HashMap();
 		map.put("url", IParserRegexConstant.REGEX_INDEX_HTML);
 		map.put("position", IParserRegexConstant.HTML_INDEX);
-		Proxy.get(this.getUrl(request) + "/manager/cms/generate/generateIndex.do", header, map, Const.UTF8);
+		Proxy.get(this.getUrl(request) + managerPath + "/cms/generate/generateIndex.do", header, map);
 
 		this.outJson(response, ModelCode.CMS_GENERATE_ARTICLE, true);
 	}
@@ -670,13 +681,13 @@ public class GeneraterAction extends BaseAction {
 	 */
 	@RequestMapping("/{articleId}/generateArticleByArticleId")
 	@ResponseBody
-	public boolean generateArticleByArticleId(HttpServletRequest request, HttpServletResponse response, @PathVariable int articleId) {
+	public void generateArticleByArticleId(HttpServletRequest request, HttpServletResponse response, @PathVariable int articleId) {
 		AppEntity app = this.getApp(request);
 		String generatePath = getRealPath(request, IParserRegexConstant.HTML_SAVE_PATH) + File.separator + app.getAppId() + File.separator;// 站点生成后保存的html地址
 		FileUtil.createFolder(generatePath);
 		String tmpPath = getRealPath(request, IParserRegexConstant.REGEX_SAVE_TEMPLATE) + File.separator + app.getAppId() + File.separator + app.getAppStyle(); // 网站风格物理路径
 		String url = app.getAppHostUrl() + File.separator + IParserRegexConstant.HTML_SAVE_PATH + File.separator + app.getAppId() + File.separator; // 文章地址前缀
-		ArticleEntity article = (ArticleEntity) articleBiz.getBasicEntity(articleId);
+		ArticleEntity article = (ArticleEntity) articleBiz.getBasic(articleId);
 		ColumnEntity tempColumn = article.getColumn();
 		FileUtil.createFolder(generatePath + tempColumn.getColumnPath());
 		String writePath = null;
@@ -740,7 +751,7 @@ public class GeneraterAction extends BaseAction {
 			FileUtil.writeFile(coverContent, writePath, FileUtil.URF8);// 写文件
 			break;
 		}
-		return true;
+		this.outJson(response, true);
 	}
 
 	/**
@@ -756,7 +767,7 @@ public class GeneraterAction extends BaseAction {
 		//获取所有的内容管理栏目
 		List<ColumnEntity> list  = columnBiz.queryAll(websiteId,modelId);
 		model.addAttribute("list",  JSONArray.toJSONString(list));
-		return "/manager/cms/generate/generate_column";
+		return view("/cms/generate/generate_column");
 	}
 
 	/**
@@ -769,7 +780,7 @@ public class GeneraterAction extends BaseAction {
 		//获取应用实体信息
 		AppEntity app = this.getApp(request);
 		//组织主页预览地址
-		String indexPosition = app.getAppHostUrl() + File.separator + IParserRegexConstant.HTML_SAVE_PATH + File.separator + app.getAppId() + File.separator + position;
+		String indexPosition = app.getAppHostUrl() +  File.separator + IParserRegexConstant.HTML_SAVE_PATH + File.separator + app.getAppId() + File.separator + position;
 		return "redirect:" + indexPosition;
 	}
 

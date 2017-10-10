@@ -1,5 +1,5 @@
 /**
-The MIT License (MIT) * Copyright (c) 2015 铭飞科技
+The MIT License (MIT) * Copyright (c) 2016 铭飞科技(mingsoft.net)
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -23,9 +23,10 @@ package com.mingsoft.cms.entity;
 
 import java.io.File;
 
+import com.mingsoft.base.constant.Const;
 import com.mingsoft.basic.entity.AppEntity;
-
 import com.mingsoft.basic.entity.BasicEntity;
+import com.mingsoft.basic.entity.ColumnEntity;
 import com.mingsoft.parser.IParserRegexConstant;
 import com.mingsoft.util.StringUtil;
 
@@ -33,7 +34,7 @@ import com.mingsoft.util.StringUtil;
  * 
  * 
  * <p>
- * <b>铭飞CMS-铭飞内容管理系统</b>
+ * <b>铭飞MS平台</b>
  * </p>
  * 
  * <p>
@@ -308,8 +309,8 @@ public class ArticleEntity extends BasicEntity{
 	
 	public String getArticleUrl(AppEntity app) {
 		if (!StringUtil.isBlank(app.getAppMobileStyle())) {
-			return app.getAppHostUrl()+IParserRegexConstant.HTML_SAVE_PATH+File.separator+"m"+File.separator+this.getArticleUrl();
+			return app.getAppHostUrl()+IParserRegexConstant.HTML_SAVE_PATH+Const.SEPARATOR+IParserRegexConstant.MOBILE+Const.SEPARATOR+this.getArticleUrl();
 		}
-		return app.getAppHostUrl()+File.separator+IParserRegexConstant.HTML_SAVE_PATH+File.separator+this.getArticleUrl();
+		return app.getAppHostUrl()+Const.SEPARATOR+IParserRegexConstant.HTML_SAVE_PATH+Const.SEPARATOR+this.getArticleUrl();
 	}
 }
